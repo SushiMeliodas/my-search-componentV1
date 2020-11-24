@@ -6,10 +6,8 @@ import Item from './components/Item';
 import SearchBar from './components/SearchBar';
 import axios from 'axios';
 import useStyles from './styles/AppStyles';
-import { PostData, TitleData } from './types/Tstypes';
-
-//Declare similarity library
-const stringSimilarity = require('string-similarity');
+import { PostData } from './types/Tstypes';
+import Fuse from 'fuse.js';
 
 const initialState = {
   // isLoading: true,
@@ -30,6 +28,27 @@ const reducer = (state: any, action: any) => {
     default:
       throw new Error();
   }
+};
+
+//Set Fuse search rules
+const options = {
+  // useExtendedSearch: true,
+  // isCaseSensitive: false,
+  includeScore: true,
+  shouldSort: true,
+  // includeMatches: false,
+  // findAllMatches: false,
+  // minMatchCharLength: 1,
+  // location: 0,
+  // threshold: 0.6,
+  // distance: 100,
+  useExtendedSearch: true,
+  ignoreLocation: true,
+  // ignoreFieldNorm: false,
+  maxPatternLength: 32,
+
+  // Search in `author` and in `tags` array
+  keys: ['title', 'body'],
 };
 
 //Declare API url
@@ -54,6 +73,7 @@ const App = () => {
       });
   };
 
+  //Refresh get api
   useEffect(() => {
     getTableData();
   }, []);
@@ -61,52 +81,90 @@ const App = () => {
   const handleInput = (e: { target: { value: any } }) => {
     //Declare for input value
     let str = e.target.value;
+
     //Call case on reducer
     dispatch({ type: 'SEARCH_INPUT', payload: str });
-    const newArr = state.data
-      .filter(
-        (item: TitleData) =>
-          item.title.toLowerCase().includes(str.toLowerCase()) ||
-          item.body.toLowerCase().includes(str.toLowerCase())
-      )
-      .map((item: TitleData) => {
-        //Highlight related search words
-        let newTitle = item.title.replace(
-          new RegExp(str, 'gi'),
-          (match: any) =>
-            `<mark style="background: #2769AA; color: white;">${match}</mark>`
-        );
-        let newBody = item.body.replace(
-          new RegExp(str, 'gi'),
-          (match: any) =>
-            `<mark style="background: #2769AA; color: white;">${match}</mark>`
-        );
-        //Get similarity rate
-        let similarityOne = stringSimilarity.compareTwoStrings(str, item.title);
-        let similarityTwo = stringSimilarity.compareTwoStrings(str, item.body);
-        //Sumboth multiple content
-        let sortedData = (similarityOne + similarityTwo) * 100;
-        //Fixed the decimal to 1 decimal place
-        let similarData = sortedData.toFixed(1);
-        //Convert similarity rate to number
-        let similarValue = parseFloat(similarData);
 
-        return {
-          ...item,
-          title: newTitle,
-          body: newBody,
-          similarity: similarValue,
-        };
-      });
+    let list = state.data;
+    let fuse = new Fuse(list, options);
+    const results = fuse.search(str);
+
+    console.log(results);
+    const newArr = results.map((result: any) => {
+      //Highlight related search words
+      let newTitle = result.item.title.replace(
+        new RegExp(str, 'gi'),
+        (match: any) =>
+          `<mark style="background: #2769AA; color: white;">${match}</mark>`
+      );
+      let newBody = result.item.body.replace(
+        new RegExp(str, 'gi'),
+        (match: any) =>
+          `<mark style="background: #2769AA; color: white;">${match}</mark>`
+      );
+
+      let matchScore = result.score;
+
+      console.log(matchScore.toFixed(1));
+
+      return {
+        ...result.item,
+        title: newTitle,
+        body: newBody,
+        similarity: matchScore.toFixed(1),
+      };
+    });
+
+    // const newArr = state.data
+    //   //Perform search action
+    //   .filter(
+    //     (item: TitleData) =>
+    //       item.title.toLowerCase().includes(str.toLowerCase()) ||
+    //       item.body.toLowerCase().includes(str.toLowerCase())
+    //   )
+    //   .map((item: TitleData) => {
+    //     //Highlight related search words
+    //     let newTitle = item.title.replace(
+    //       new RegExp(str, 'gi'),
+    //       (match: any) =>
+    //         `<mark style="background: #2769AA; color: white;">${match}</mark>`
+    //     );
+    //     let newBody = item.body.replace(
+    //       new RegExp(str, 'gi'),
+    //       (match: any) =>
+    //         `<mark style="background: #2769AA; color: white;">${match}</mark>`
+    //     );
+
+    //     //Get similarity rate
+    //     let similarityOne = stringSimilarity.compareTwoStrings(str, item.title);
+    //     let similarityTwo = stringSimilarity.compareTwoStrings(str, item.body);
+
+    //     //Sumboth multiple content
+    //     let sortedData = (similarityOne + similarityTwo) * 100;
+
+    //     //Fixed the decimal to 1 decimal place
+    //     let similarData = sortedData.toFixed(1);
+
+    //     //Convert similarity rate to number
+    //     let similarValue = parseFloat(similarData);
+
+    //     return {
+    //       ...item,
+    //       title: newTitle,
+    //       body: newBody,
+    //       similarity: similarValue,
+    //     };
+    //   });
 
     //Sort Data based on Similarity Rate
     const sortedData = newArr.sort(function (
       a: { similarity: number },
       b: { similarity: number }
     ) {
-      return b.similarity - a.similarity;
+      return a.similarity - b.similarity;
     });
 
+    console.log(newArr);
     //Display search results
     dispatch({ type: 'SEARCH_DATA', payload: sortedData });
   };
