@@ -1,13 +1,18 @@
 import React, { useEffect, useReducer } from 'react';
 import './App.css';
 import { Card, Box, Container, Grid } from '@material-ui/core';
-// import Counter from './components/Counter';
+//Api Library
+import axios from 'axios';
+//Material Custom Styles
+import useStyles from './styles/AppStyles';
+//Types
+import { PostData, TitleData } from './types/Tstypes';
+//Components
 import Item from './components/Item';
 import SearchBar from './components/SearchBar';
-import axios from 'axios';
-import useStyles from './styles/AppStyles';
-import { PostData } from './types/Tstypes';
-import Fuse from 'fuse.js';
+
+//Similarity
+const stringSimilarity = require('string-similarity');
 
 const initialState = {
   // isLoading: true,
@@ -28,27 +33,6 @@ const reducer = (state: any, action: any) => {
     default:
       throw new Error();
   }
-};
-
-//Set Fuse search rules
-const options = {
-  // useExtendedSearch: true,
-  // isCaseSensitive: false,
-  includeScore: true,
-  shouldSort: true,
-  // includeMatches: false,
-  // findAllMatches: false,
-  // minMatchCharLength: 1,
-  // location: 0,
-  // threshold: 0.6,
-  // distance: 100,
-  useExtendedSearch: true,
-  ignoreLocation: true,
-  // ignoreFieldNorm: false,
-  maxPatternLength: 32,
-
-  // Search in `author` and in `tags` array
-  keys: ['title', 'body'],
 };
 
 //Declare API url
@@ -85,83 +69,53 @@ const App = () => {
     //Call case on reducer
     dispatch({ type: 'SEARCH_INPUT', payload: str });
 
-    let list = state.data;
-    let fuse = new Fuse(list, options);
-    const results = fuse.search(str);
+    const newArr = state.data
+      //Perform search action
+      .filter(
+        (item: TitleData) =>
+          item.title.toLowerCase().includes(str.toLowerCase()) ||
+          item.body.toLowerCase().includes(str.toLowerCase())
+      )
+      .map((item: TitleData) => {
+        //Highlight related search words
+        let newTitle = item.title.replace(
+          new RegExp(str, 'gi'),
+          (match: any) =>
+            `<mark style="background: #2769AA; color: white;">${match}</mark>`
+        );
+        let newBody = item.body.replace(
+          new RegExp(str, 'gi'),
+          (match: any) =>
+            `<mark style="background: #2769AA; color: white;">${match}</mark>`
+        );
 
-    console.log(results);
-    const newArr = results.map((result: any) => {
-      //Highlight related search words
-      let newTitle = result.item.title.replace(
-        new RegExp(str, 'gi'),
-        (match: any) =>
-          `<mark style="background: #2769AA; color: white;">${match}</mark>`
-      );
-      let newBody = result.item.body.replace(
-        new RegExp(str, 'gi'),
-        (match: any) =>
-          `<mark style="background: #2769AA; color: white;">${match}</mark>`
-      );
+        //Get similarity rate
+        let similarityOne = stringSimilarity.compareTwoStrings(str, item.title);
+        let similarityTwo = stringSimilarity.compareTwoStrings(str, item.body);
 
-      let matchScore = result.score;
+        //Sumboth multiple content
+        let sortedData = (similarityOne + similarityTwo) * 100;
 
-      console.log(matchScore.toFixed(1));
+        //Fixed the decimal to 1 decimal place
+        let similarData = sortedData.toFixed(1);
 
-      return {
-        ...result.item,
-        title: newTitle,
-        body: newBody,
-        similarity: matchScore.toFixed(1),
-      };
-    });
+        //Convert similarity rate to number
+        let similarValue = parseFloat(similarData);
 
-    // const newArr = state.data
-    //   //Perform search action
-    //   .filter(
-    //     (item: TitleData) =>
-    //       item.title.toLowerCase().includes(str.toLowerCase()) ||
-    //       item.body.toLowerCase().includes(str.toLowerCase())
-    //   )
-    //   .map((item: TitleData) => {
-    //     //Highlight related search words
-    //     let newTitle = item.title.replace(
-    //       new RegExp(str, 'gi'),
-    //       (match: any) =>
-    //         `<mark style="background: #2769AA; color: white;">${match}</mark>`
-    //     );
-    //     let newBody = item.body.replace(
-    //       new RegExp(str, 'gi'),
-    //       (match: any) =>
-    //         `<mark style="background: #2769AA; color: white;">${match}</mark>`
-    //     );
-
-    //     //Get similarity rate
-    //     let similarityOne = stringSimilarity.compareTwoStrings(str, item.title);
-    //     let similarityTwo = stringSimilarity.compareTwoStrings(str, item.body);
-
-    //     //Sumboth multiple content
-    //     let sortedData = (similarityOne + similarityTwo) * 100;
-
-    //     //Fixed the decimal to 1 decimal place
-    //     let similarData = sortedData.toFixed(1);
-
-    //     //Convert similarity rate to number
-    //     let similarValue = parseFloat(similarData);
-
-    //     return {
-    //       ...item,
-    //       title: newTitle,
-    //       body: newBody,
-    //       similarity: similarValue,
-    //     };
-    //   });
+        return {
+          ...item,
+          title: newTitle,
+          body: newBody,
+          similarity: similarValue,
+        };
+      });
 
     //Sort Data based on Similarity Rate
     const sortedData = newArr.sort(function (
       a: { similarity: number },
       b: { similarity: number }
     ) {
-      return a.similarity - b.similarity;
+      return b.similarity - a.similarity;
     });
 
     console.log(newArr);
